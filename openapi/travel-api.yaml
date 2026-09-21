@@ -1,0 +1,394 @@
+openapi: 3.0.3
+info:
+  title: Wayfare travel-api
+  version: "1.0.0"
+  description: |
+    The exact REST contract from a separate booking-agent/MCP implementation
+    brief: this backend plays the role that brief calls `travel-api`, so a
+    future `traveler-mcp` and `flights-mcp` server can call it directly.
+
+    Only the four operations from that contract are documented here -
+    `get_my_profile`, `list_my_bookings`, `search_flights`, `book_flight`.
+    The browser-facing `/api/*` routes used by the Wayfare frontend are a
+    separate, wrapped-response surface and are intentionally not part of
+    this document.
+
+    **`traveler_id` is a ThunderID `sub` claim (a string), not an internal
+    database row id.** Per the brief's own design, an MCP tool never lets
+    the model supply a traveler_id - it derives one from the validated
+    (possibly delegated) token's subject and passes that straight through.
+    A traveler only exists here once they've signed in at least once
+    through the browser flow, since that's what creates their row.
+
+    **Auth is deliberately shallow at this layer.** The bearer token below
+    is one shared service credential ("this call comes from the trusted
+    MCP layer"), not a per-user token - it has no subject to check
+    `traveler_id` against. Verifying that the end user actually is the
+    traveler being accessed is the MCP servers' job in that architecture,
+    done before they ever call this API.
+servers:
+  - url: http://18.219.139.10
+    description: AWS EC2 deployment
+  - url: http://localhost:4000
+    description: Local development
+
+security:
+  - travelApiKey: []
+
+tags:
+  - name: travelers
+    description: get_my_profile / list_my_bookings
+  - name: flights
+    description: search_flights
+  - name: bookings
+    description: book_flight
+
+paths:
+  /travelers/{traveler_id}:
+    get:
+      operationId: get_my_profile
+      tags: [travelers]
+      summary: get_my_profile(traveler_id)
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+      responses:
+        '200':
+          description: Traveler profile found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TravelerProfile'
+              example:
+                traveler_id: "01900000-0000-7000-8000-000000000030"
+                name: "Administrator"
+                email: "admin@example.com"
+                home_airport: null
+                tier: "Standard"
+                policy_max_fare_usd: "1500.00"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No traveler with that `traveler_id` (ThunderID `sub`) exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: traveler_not_found
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /travelers/{traveler_id}/bookings:
+    get:
+      operationId: list_my_bookings
+      tags: [travelers]
+      summary: list_my_bookings(traveler_id)
+      parameters:
+        - $ref: '#/components/parameters/TravelerId'
+      responses:
+        '200':
+          description: |
+            The traveler's bookings, ordered by flight departure time
+            ascending. A bare JSON array (no wrapper object) - an empty
+            array if they have no bookings, never a 404.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingSummary'
+              example:
+                - booking_id: "WF38UV8V"
+                  flight_id: 1
+                  origin: "JFK"
+                  destination: "LAX"
+                  depart_at: "2026-09-22T16:30:00.000Z"
+                  fare_class: "ECONOMY"
+                  price_usd: "308.00"
+                  status: "CONFIRMED"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /flights/search:
+    get:
+      operationId: search_flights
+      tags: [flights]
+      summary: search_flights(origin, destination, date)
+      parameters:
+        - name: origin
+          in: query
+          required: false
+          description: IATA origin airport code. Omit to match any origin.
+          schema:
+            type: string
+            pattern: '^[A-Za-z]{3}$'
+          example: JFK
+        - name: destination
+          in: query
+          required: false
+          description: IATA destination airport code. Omit to match any destination.
+          schema:
+            type: string
+            pattern: '^[A-Za-z]{3}$'
+          example: LAX
+        - name: date
+          in: query
+          required: false
+          description: Departure date filter (matches on the date part only). Omit to match any date.
+          schema:
+            type: string
+            format: date
+          example: "2026-09-22"
+      responses:
+        '200':
+          description: |
+            Matching flights with at least one seat available, ordered by
+            departure time ascending, capped at 100 results. A bare JSON
+            array - an empty array if nothing matches, never a 404.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FlightSearchResult'
+              example:
+                - flight_id: 1
+                  carrier: "Wayfare Air"
+                  origin: "JFK"
+                  destination: "LAX"
+                  depart_at: "2026-09-22T16:30:00.000Z"
+                  arrive_at: "2026-09-22T22:30:00.000Z"
+                  fare_class: "ECONOMY"
+                  price_usd: "308.00"
+                  fare_rules_text: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /bookings:
+    post:
+      operationId: book_flight
+      tags: [bookings]
+      summary: book_flight(traveler_id, flight_id)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+            example:
+              traveler_id: "01900000-0000-7000-8000-000000000030"
+              flight_id: 1
+              idempotency_key: "postman-demo-key-0001"
+      responses:
+        '201':
+          description: A new booking was created; one seat was deducted from the flight.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResult'
+              example:
+                booking_id: "WF3CXK5E"
+                status: "CONFIRMED"
+                price_usd: "308.00"
+        '400':
+          description: A required field is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid_request
+                message: "traveler_id, flight_id, and idempotency_key are all required."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Unknown `traveler_id` or `flight_id`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                traveler_not_found:
+                  value: { error: traveler_not_found }
+                flight_not_found:
+                  value: { error: flight_not_found }
+        '409':
+          description: |
+            `idempotency_key` was already used. No new booking is created;
+            the response is the ORIGINAL booking, in the exact same shape
+            as a 201, so a retrying caller can treat this as success.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingResult'
+              example:
+                booking_id: "WF3CXK5E"
+                status: "CONFIRMED"
+                price_usd: "308.00"
+        '422':
+          description: The flight has no seats left.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: sold_out
+                message: "No seats left on this flight."
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    travelApiKey:
+      type: http
+      scheme: bearer
+      description: |
+        A single shared service credential (`TRAVEL_API_KEY` in the
+        server's environment), sent as `Authorization: Bearer <token>`.
+        Proves "this call comes from the trusted MCP layer" - it is not
+        tied to any individual end user.
+
+  parameters:
+    TravelerId:
+      name: traveler_id
+      in: path
+      required: true
+      description: ThunderID `sub` claim of the traveler (not an internal database id).
+      schema:
+        type: string
+      example: "01900000-0000-7000-8000-000000000030"
+
+  responses:
+    Unauthorized:
+      description: Missing or incorrect bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+            message: "Invalid or missing bearer token."
+    InternalError:
+      description: Unexpected server-side failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: internal_error
+
+  schemas:
+    TravelerProfile:
+      type: object
+      properties:
+        traveler_id:
+          type: string
+          description: ThunderID `sub` claim.
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+        home_airport:
+          type: string
+          nullable: true
+          description: IATA airport code. No source of real data yet (ThunderID has no loyalty claims), so this defaults to null for new travelers.
+        tier:
+          type: string
+          description: Defaults to "Standard" for new travelers; no real source yet.
+        policy_max_fare_usd:
+          type: string
+          description: A decimal amount serialized as a string (MySQL DECIMAL via mysql2). Defaults to "1500.00" for new travelers.
+      required: [traveler_id, name, email, home_airport, tier, policy_max_fare_usd]
+
+    BookingSummary:
+      type: object
+      properties:
+        booking_id:
+          type: string
+          description: Human-facing booking reference (not the internal database row id).
+        flight_id:
+          type: integer
+        origin:
+          type: string
+        destination:
+          type: string
+        depart_at:
+          type: string
+          format: date-time
+        fare_class:
+          type: string
+        price_usd:
+          type: string
+          description: Decimal amount serialized as a string.
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED]
+      required: [booking_id, flight_id, origin, destination, depart_at, fare_class, price_usd, status]
+
+    FlightSearchResult:
+      type: object
+      properties:
+        flight_id:
+          type: integer
+        carrier:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        depart_at:
+          type: string
+          format: date-time
+        arrive_at:
+          type: string
+          format: date-time
+        fare_class:
+          type: string
+        price_usd:
+          type: string
+          description: Decimal amount serialized as a string.
+        fare_rules_text:
+          type: string
+          nullable: true
+      required: [flight_id, carrier, origin, destination, depart_at, arrive_at, fare_class, price_usd, fare_rules_text]
+
+    BookingRequest:
+      type: object
+      properties:
+        traveler_id:
+          type: string
+          description: ThunderID `sub` claim of the traveler making the booking.
+        flight_id:
+          type: integer
+        idempotency_key:
+          type: string
+          description: Caller-supplied unique key. Replaying the same key returns the original booking (409) instead of creating a duplicate.
+      required: [traveler_id, flight_id, idempotency_key]
+
+    BookingResult:
+      type: object
+      properties:
+        booking_id:
+          type: string
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED]
+        price_usd:
+          type: string
+          description: Decimal amount serialized as a string.
+      required: [booking_id, status, price_usd]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
