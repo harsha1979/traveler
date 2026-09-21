@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Signing you in — Wayfare Travel</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    .callback-screen {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      text-align: center;
+      padding: 24px;
+    }
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 4px solid var(--color-border);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .error-box {
+      max-width: 420px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 16px 20px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="callback-screen">
+    <div id="spinner" class="spinner"></div>
+    <p id="status-text">Completing sign-in with ThunderID…</p>
+    <div id="error-box" class="error-box hidden"></div>
+    <a id="back-link" href="index.html" class="btn btn-outline hidden">Back to Wayfare</a>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async function () {
+      const statusText = document.getElementById("status-text");
+      const spinner = document.getElementById("spinner");
+      const errorBox = document.getElementById("error-box");
+      const backLink = document.getElementById("back-link");
+
+      try {
+        await window.ThunderIDAuth.handleRedirectCallback();
+        statusText.textContent = "Signed in! Redirecting…";
+        setTimeout(function () {
+          window.location.href = "index.html";
+        }, 600);
+      } catch (err) {
+        spinner.classList.add("hidden");
+        statusText.textContent = "We couldn't complete sign-in.";
+        errorBox.textContent = err.message || String(err);
+        errorBox.classList.remove("hidden");
+        backLink.classList.remove("hidden");
+      }
+    })();
+  </script>
+</body>
+</html>

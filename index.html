@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wayfare Flights — Search & Book</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">✈️</span>
+      <span>Wayfare Flights</span>
+    </div>
+
+    <ul class="nav-links">
+      <li><a href="#search">Search Flights</a></li>
+      <li><a href="#my-bookings-section">My Bookings</a></li>
+    </ul>
+
+    <div class="header-actions">
+      <span id="user-welcome" class="user-welcome hidden"></span>
+      <button id="btn-signin" class="btn btn-outline">Sign In</button>
+      <button id="btn-signup" class="btn btn-primary">Sign Up</button>
+      <button id="btn-logout" class="btn btn-ghost hidden">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="search" class="section flight-search-section">
+      <div class="section-heading">
+        <h1>Search flights</h1>
+        <p>Pick your route and date. Sign in when you're ready to book.</p>
+      </div>
+
+      <form id="flight-search-form" class="flight-search-form">
+        <div class="field">
+          <label for="origin">From</label>
+          <select id="origin" name="origin">
+            <option value="">Any</option>
+            <option value="JFK">New York (JFK)</option>
+            <option value="LAX">Los Angeles (LAX)</option>
+            <option value="LHR">London (LHR)</option>
+            <option value="SFO">San Francisco (SFO)</option>
+            <option value="SEA">Seattle (SEA)</option>
+            <option value="ORD">Chicago (ORD)</option>
+            <option value="MIA">Miami (MIA)</option>
+            <option value="ATL">Atlanta (ATL)</option>
+            <option value="DFW">Dallas (DFW)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="destination">To</label>
+          <select id="destination" name="destination">
+            <option value="">Any</option>
+            <option value="JFK">New York (JFK)</option>
+            <option value="LAX">Los Angeles (LAX)</option>
+            <option value="LHR">London (LHR)</option>
+            <option value="SFO">San Francisco (SFO)</option>
+            <option value="SEA">Seattle (SEA)</option>
+            <option value="ORD">Chicago (ORD)</option>
+            <option value="MIA">Miami (MIA)</option>
+            <option value="ATL">Atlanta (ATL)</option>
+            <option value="DFW">Dallas (DFW)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="date">Date</label>
+          <input type="date" id="date" name="date" />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg">Search Flights</button>
+      </form>
+
+      <div id="booking-message" class="booking-message hidden"></div>
+
+      <div id="flight-results" class="flight-results"></div>
+    </section>
+
+    <section id="my-bookings-section" class="section my-bookings-section hidden">
+      <div class="section-heading">
+        <h2>My Bookings</h2>
+        <p>Flights you've booked with this account.</p>
+      </div>
+      <div id="my-bookings-list" class="my-bookings-list"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>© 2026 Wayfare Flights. All rights reserved.</span>
+    <span>Secured by ThunderID</span>
+  </footer>
+
+  <!-- Chat widget (UI only for now — agent logic to be implemented later) -->
+  <button id="chat-launcher" class="chat-launcher" aria-label="Open chat assistant">💬</button>
+
+  <div id="chat-panel" class="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-title">
+        <span class="dot"></span>
+        Travel Assistant
+      </div>
+      <button id="chat-close" class="chat-close" aria-label="Close chat">✕</button>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <form id="chat-form" class="chat-form">
+      <input id="chat-input" type="text" placeholder="How can I help you?" autocomplete="off" />
+      <button type="submit" class="chat-send" aria-label="Send">➤</button>
+    </form>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/flights.js"></script>
+  <script src="js/chat.js"></script>
+</body>
+</html>
