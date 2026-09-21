@@ -14,29 +14,37 @@
  *      app already does PKCE, so no client secret is needed.
  *   4. Copy the generated Client ID into `clientId` below.
  */
+// OAuth requires redirect_uri to be byte-for-byte identical between the
+// authorize request (built on index.html) and the token exchange (run
+// from callback.html). Stripping a specific filename like "index.html"
+// broke on any other page - e.g. on callback.html itself, the regex
+// found no "index.html" to strip and left the path as "/callback.html",
+// producing "http://host/callback.htmlcallback.html". This instead
+// finds the directory containing whichever page is currently loaded, so
+// it resolves to the same value no matter which page evaluates it.
+function wayfareSiteRoot() {
+  const path = window.location.pathname;
+  return window.location.origin + path.slice(0, path.lastIndexOf("/") + 1);
+}
+
 window.THUNDER_ID_CONFIG = {
   // Base URL of the ThunderID instance
   baseUrl: "https://default-idp.amp.18.217.217.55.sslip.io",
 
   // OAuth2 client id registered in the ThunderID console (see steps above)
-  clientId: "6QSudNFKoL3cdxkH1uG3yA",
+  clientId: "GkcoOxmxpmnfQSXXWRlLIw",
 
   // Only needed if the app is registered as a *confidential* client.
   // Leave blank for a public client (recommended for a browser app) -
   // PKCE alone secures the flow. See auth.js: the secret is only sent
   // if this is non-empty.
-  clientSecret: "M8jUKAYB7iDGDmoTQcYj47560bll_9wf7WbXzrJsXZc",
+  clientSecret: "",
 
   // Where ThunderID should send the user back to after login
-  redirectUri:
-    window.location.origin +
-    window.location.pathname.replace(/index\.html$/, "") +
-    "callback.html",
+  redirectUri: wayfareSiteRoot() + "callback.html",
 
   // Where to send the user after a successful logout
-  postLogoutRedirectUri:
-    window.location.origin +
-    window.location.pathname.replace(/index\.html$/, ""),
+  postLogoutRedirectUri: wayfareSiteRoot(),
 
   // Standard OIDC scopes
   scope: "openid profile email",
