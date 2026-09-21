@@ -1,0 +1,203 @@
+{
+  "info": {
+    "_postman_id": "e099b96f-12d3-4d19-a555-2bb392b0be40",
+    "name": "Wayfare Flight Booking API",
+    "description": "Tests every backend endpoint of the Wayfare flight booking app: the browser-facing API, the OAuth2 token-exchange proxy, and the travel-api contract for the future booking-agent/MCP project.\n\n**The endpoint is fully editable** - it's the `baseUrl` collection variable (Variables tab, or use the bundled environments to switch between AWS and local with one click).\n\n### Auth you need to fill in yourself\n\n- `travelApiKey` - the `TRAVEL_API_KEY` value from the server's `.env` on whichever host you're testing. Never commit a real value here; it's left as a placeholder deliberately.\n- `thunderIdAccessToken` - a real ThunderID access token. Postman can't easily replicate this app's exact PKCE + CORS-avoiding backend-proxy login flow, so the simplest way to get one: sign in through the actual site in a browser, open devtools console, and run:\n  ```js\n  JSON.parse(localStorage.getItem('tb_session')).accessToken\n  ```\n  Paste the result into the `thunderIdAccessToken` variable. It expires (see the token's own `exp` claim, typically 1 hour), so you'll need a fresh one periodically.\n\n### Folders\n\n1. **Health** - no auth\n2. **Browser-facing API** - the frontend's own routes; auth via `thunderIdAccessToken`\n3. **travel-api contract** - for the future MCP project; auth via `travelApiKey`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://18.219.139.10", "description": "Backend base URL. Edit this (or switch environments) to point at AWS, local dev, or anywhere else this is deployed." },
+    { "key": "travelApiKey", "value": "REPLACE_WITH_TRAVEL_API_KEY_FROM_SERVER_ENV", "description": "TRAVEL_API_KEY from the target server's .env - guards the travel-api contract routes." },
+    { "key": "thunderIdAccessToken", "value": "REPLACE_WITH_ACCESS_TOKEN_FROM_A_REAL_BROWSER_LOGIN", "description": "A real ThunderID access token for a signed-in user. See collection description for how to grab one." },
+    { "key": "travelerId", "value": "01900000-0000-7000-8000-000000000030", "description": "ThunderID `sub` of a traveler who has signed in at least once (this is the `admin@example.com` account used during development - replace with any real traveler's sub)." },
+    { "key": "flightId", "value": "1", "description": "A seeded flight id (id=1 is JFK -> LAX, Wayfare Air WA101)." },
+    { "key": "origin", "value": "JFK", "description": "IATA origin code for search requests." },
+    { "key": "destination", "value": "LAX", "description": "IATA destination code for search requests." },
+    { "key": "date", "value": "", "description": "Optional YYYY-MM-DD filter for search requests. Leave blank to match any date." },
+    { "key": "idempotencyKey", "value": "postman-demo-key-0001", "description": "Used by the travel-api book_flight request. Run the same request twice with this unchanged to see the 409 duplicate-booking replay behavior; change it to make a genuinely new booking." }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] },
+            "description": "No auth. Should return {\"status\":\"ok\"}."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Browser-facing API",
+      "description": "What the frontend itself calls. The three /api/me/* routes require a real ThunderID access token - see the collection description for how to obtain one.",
+      "item": [
+        {
+          "name": "Search flights (public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/flights/search?origin={{origin}}&destination={{destination}}&date={{date}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "flights", "search"],
+              "query": [
+                { "key": "origin", "value": "{{origin}}" },
+                { "key": "destination", "value": "{{destination}}" },
+                { "key": "date", "value": "{{date}}" }
+              ]
+            },
+            "description": "No auth required. Returns { flights: [...] }."
+          },
+          "response": []
+        },
+        {
+          "name": "Get my profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{thunderIdAccessToken}}", "type": "string" }]
+            },
+            "url": { "raw": "{{baseUrl}}/api/me/profile", "host": ["{{baseUrl}}"], "path": ["api", "me", "profile"] },
+            "description": "Requires a real ThunderID access token. Verified server-side against ThunderID's own /oauth2/userinfo endpoint on every call. Returns { profile: {...} } or 401 if the token is invalid/expired."
+          },
+          "response": []
+        },
+        {
+          "name": "List my bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{thunderIdAccessToken}}", "type": "string" }]
+            },
+            "url": { "raw": "{{baseUrl}}/api/me/bookings", "host": ["{{baseUrl}}"], "path": ["api", "me", "bookings"] },
+            "description": "Requires a real ThunderID access token. Returns { bookings: [...] }."
+          },
+          "response": []
+        },
+        {
+          "name": "Book a flight",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{thunderIdAccessToken}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"flightId\": {{flightId}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/me/bookings", "host": ["{{baseUrl}}"], "path": ["api", "me", "bookings"] },
+            "description": "Requires a real ThunderID access token. 201 + { booking: {...} } on success, 409 if the flight is sold out, 404 if flightId doesn't exist."
+          },
+          "response": []
+        },
+        {
+          "name": "Exchange auth code for token (internal)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"REPLACE_WITH_A_FRESH_AUTHORIZATION_CODE\",\n  \"redirect_uri\": \"{{baseUrl}}/callback.html\",\n  \"client_id\": \"REPLACE_WITH_THUNDERID_CLIENT_ID\",\n  \"code_verifier\": \"REPLACE_WITH_THE_MATCHING_PKCE_VERIFIER\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/token", "host": ["{{baseUrl}}"], "path": ["api", "auth", "token"] },
+            "description": "Internal route the frontend calls right after a ThunderID redirect - exists because ThunderID's own /oauth2/token endpoint has no CORS support, so the browser can't call it directly. Included here for completeness, but not practical to drive from Postman: the authorization code is single-use and expires within seconds/minutes, and the code_verifier only exists in the browser's sessionStorage from that specific login attempt. The realistic way to get a token for the requests above is the browser-devtools method in the collection description, not this endpoint."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "travel-api contract",
+      "description": "Exact REST contract from the future booking-agent/MCP implementation brief: get_my_profile, list_my_bookings, search_flights, book_flight. All four require the shared TRAVEL_API_KEY bearer token - see the collection description for where to find it.",
+      "item": [
+        {
+          "name": "get_my_profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{travelApiKey}}", "type": "string" }]
+            },
+            "url": { "raw": "{{baseUrl}}/travelers/{{travelerId}}", "host": ["{{baseUrl}}"], "path": ["travelers", "{{travelerId}}"] },
+            "description": "traveler_id is the ThunderID `sub`, not an internal database id. Returns { traveler_id, name, email, home_airport, tier, policy_max_fare_usd } or 404."
+          },
+          "response": []
+        },
+        {
+          "name": "list_my_bookings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{travelApiKey}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/travelers/{{travelerId}}/bookings",
+              "host": ["{{baseUrl}}"],
+              "path": ["travelers", "{{travelerId}}", "bookings"]
+            },
+            "description": "Returns a bare array: [ { booking_id, flight_id, origin, destination, depart_at, fare_class, price_usd, status } ]."
+          },
+          "response": []
+        },
+        {
+          "name": "search_flights",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{travelApiKey}}", "type": "string" }]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/flights/search?origin={{origin}}&destination={{destination}}&date={{date}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["flights", "search"],
+              "query": [
+                { "key": "origin", "value": "{{origin}}" },
+                { "key": "destination", "value": "{{destination}}" },
+                { "key": "date", "value": "{{date}}" }
+              ]
+            },
+            "description": "Returns a bare array: [ { flight_id, carrier, origin, destination, depart_at, arrive_at, fare_class, price_usd, fare_rules_text } ]."
+          },
+          "response": []
+        },
+        {
+          "name": "book_flight",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{travelApiKey}}", "type": "string" }]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traveler_id\": \"{{travelerId}}\",\n  \"flight_id\": {{flightId}},\n  \"idempotency_key\": \"{{idempotencyKey}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/bookings", "host": ["{{baseUrl}}"], "path": ["bookings"] },
+            "description": "201 + { booking_id, status, price_usd } on a new booking. Run again UNCHANGED (same idempotencyKey variable) to see 409 + the original booking returned instead of a duplicate. 404 for an unknown traveler/flight, 422 if sold out, 400 if a field is missing."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
