@@ -51,4 +51,13 @@ window.THUNDER_ID_CONFIG = {
 };
 
 // Base URL of the backend flight-booking API (server/ directory).
-window.API_BASE_URL = "http://localhost:4000";
+//
+// Local dev serves the frontend (python3 -m http.server, port 5757) and
+// the backend (npm start, port 4000) separately, so the frontend needs
+// an explicit cross-origin URL. Any other deployment (EC2, a real
+// domain, ...) is expected to run behind a reverse proxy (nginx) that
+// proxies API paths on the SAME origin the page was loaded from, so an
+// empty string there resolves fetch("" + "/api/...") to a same-origin
+// relative path — no per-environment edits needed.
+window.API_BASE_URL =
+  window.location.hostname === "localhost" && window.location.port === "5757" ? "http://localhost:4000" : "";
